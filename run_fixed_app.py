@@ -17,91 +17,62 @@ sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
 def main():
     """Función principal para ejecutar la aplicación"""
-    logger.info("Iniciando aplicación MotoMatch con carga anticipada de datos...")
+    logger.info("Iniciando aplicación MotoMatch simplificada...")
     
-    # IMPORTANTE: Usar la función create_app en lugar de crear Flask directamente
-    from app import create_app
+    # Crear aplicación Flask básica
+    app = Flask(__name__, 
+                template_folder='app/templates',
+                static_folder='app/static')
     
-    # Crear la aplicación usando la factory function
-    app = create_app()
+    # Configuración básica
+    app.secret_key = 'clave-super-secreta'
+    app.config['SECRET_KEY'] = 'your-secret-key-here'
     
-    # Context processor para fix de URLs
-    @app.context_processor
-    def inject_url_prefix():
-        def url_for_with_prefix(endpoint, **kwargs):
-            # If the endpoint doesn't contain a dot and it's not a static endpoint,
-            # prepend 'main.' to it
-            if '.' not in endpoint and endpoint != 'static':
-                endpoint = 'main.' + endpoint
-            return url_for(endpoint, **kwargs)
-        
-        return dict(url_for=url_for_with_prefix)
-    
-    # Configurar Neo4j específicamente
+    # Configurar Neo4j (opcional)
     app.config['NEO4J_CONFIG'] = {
         'uri': 'bolt://localhost:7687',
         'user': 'neo4j',
         'password': '22446688'
     }
     
-    # Configuración directa para el driver Neo4j
-    app.config['NEO4J_URI'] = 'bolt://localhost:7687'
-    app.config['NEO4J_USER'] = 'neo4j'
-    app.config['NEO4J_PASSWORD'] = '22446688'
-    
-    # IMPORTANTE: Desactivar completamente los datos mock
-    app.config['USE_MOCK_DATA'] = False  # Nunca usar datos mock
-    
-    # Configuración de la sesión para que sea más estable
+    # Configuración de sesión
     app.config['SESSION_TYPE'] = 'filesystem'
     app.config['SESSION_PERMANENT'] = True
-    app.config['PERMANENT_SESSION_LIFETIME'] = 3600  # 1 hora
+    app.config['PERMANENT_SESSION_LIFETIME'] = 3600
     
-    # Crear e inicializar el adaptador DESPUÉS de configurar la app
+    # Context processor para fix de URLs
+    @app.context_processor
+    def inject_url_prefix():
+        def url_for_with_prefix(endpoint, **kwargs):
+            if '.' not in endpoint and endpoint != 'static':
+                endpoint = 'main.' + endpoint
+            return url_for(endpoint, **kwargs)
+        return dict(url_for=url_for_with_prefix)
+    
+    # Registrar rutas básicas
     try:
-        from app.adapter_factory import create_adapter
+        from app.routes_fixed import fixed_routes
+        app.register_blueprint(fixed_routes)
+        logger.info("✅ Rutas básicas registradas")
+    except ImportError as e:
+        logger.warning(f"No se pudieron cargar las rutas: {e}")
         
-        logger.info("🔧 Intentando crear adaptador de recomendaciones...")
-        
-        # Crear e inicializar el adaptador - cargará datos inmediatamente
-        adapter = create_adapter(app)
-        
-        # FIX: Asegurar que el adaptador tenga logger
-        if adapter and not hasattr(adapter, 'logger'):
-            adapter.logger = logging.getLogger('MotoRecommenderAdapter')
-            adapter.logger.setLevel(logging.INFO)
-        
-        # Registrar el adaptador en la aplicación
-        app.config['MOTO_RECOMMENDER'] = adapter
-        
-        if adapter:
-            logger.info("✅ Adaptador de recomendaciones creado exitosamente")
-            
-            # NUEVO: Inicializar el ranking de motos como instancia global
-            from app.algoritmo.pagerank import MotoPageRank
-            try:
-                ranking = MotoPageRank()
-                if hasattr(adapter, 'driver') and adapter.driver:
-                    logger.info("🔄 Inicializando ranking de motos desde Neo4j...")
-                    ranking.update_from_neo4j(adapter.driver)
-                    app.config['MOTO_RANKING'] = ranking
-                    logger.info("✅ Ranking de motos inicializado correctamente")
-                else:
-                    logger.warning("⚠️ No hay driver de Neo4j disponible para el ranking")
-                    
-            except Exception as ranking_error:
-                logger.error(f"❌ Error inicializando ranking: {str(ranking_error)}")
-                logger.error(traceback.format_exc())
-
-        else:
-            logger.warning("⚠️ No se pudo crear el adaptador de recomendaciones")
-            
-    except Exception as e:
-        logger.error(f"❌ Error crítico en main: {str(e)}")
-        logger.error(traceback.format_exc())
-        raise
+        # Crear ruta básica de fallback
+        @app.route('/')
+        def home():
+            return "<h1>MotoMatch</h1><p>Aplicación iniciada en modo simplificado</p>"
     
-    # Retornar la app para uso en servidores de producción
+    # Intentar crear adaptador simplificado (opcional)
+    try:
+        from app.adapter_factory_simple import create_adapter
+        adapter = create_adapter(app, use_mock_data=True)
+        app.config['MOTO_RECOMMENDER'] = adapter
+        logger.info("✅ Adaptador simplificado creado")
+    except Exception as e:
+        logger.warning(f"⚠️ No se pudo crear adaptador: {str(e)}")
+        app.config['MOTO_RECOMMENDER'] = None
+    
+    logger.info("✅ Aplicación MotoMatch iniciada en modo simplificado")
     return app
 
 def run_server(app=None, suppress_warnings=False):

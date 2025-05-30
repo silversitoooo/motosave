@@ -7,7 +7,10 @@ import logging
 from app.algoritmo.label_propagation import MotoLabelPropagation
 from app.algoritmo.moto_ideal import MotoIdealRecommender
 from app.algoritmo.pagerank import MotoPageRank
-from .adapter_factory import create_adapter
+try:
+    from .adapter_factory import create_adapter
+except ImportError:
+    from .adapter_factory_simple import create_adapter
 
 def create_app():
     """Create and configure the Flask application"""
@@ -90,15 +93,9 @@ def create_app():
     adapter = create_adapter(app)
     app.config['MOTO_RECOMMENDER'] = adapter
     
-    # Registrar rutas actualizadas (nueva funcionalidad)
+    # Registrar rutas actualizadas (opcional)
     try:
         from update_routes import register_updated_routes
-        # Obtener el blueprint principal (fixed_routes/main)
-        for rule in app.url_map.iter_rules():
-            if rule.endpoint.startswith('main.'):
-                blueprint_name = rule.endpoint.split('.')[0]
-                break
-        
         # Encontrar y registrar las rutas actualizadas en el blueprint correcto
         for blueprint in app.blueprints.values():
             if blueprint.name == 'main':

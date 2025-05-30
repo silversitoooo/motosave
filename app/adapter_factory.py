@@ -11,9 +11,8 @@ import traceback
 # Configurar logging
 logger = logging.getLogger(__name__)
 
-# Asegurar que los módulos son encontrados
-sys.path.insert(0, os.path.abspath(os.path.dirname(os.path.dirname(__file__))))
-from moto_adapter_fixed import MotoRecommenderAdapter
+# Importar desde __init__.py donde ya está definido
+from app import MotoRecommenderAdapter
 
 # Add the _ensure_neo4j_connection method to the adapter if it doesn't exist
 def ensure_neo4j_connection_patch(adapter):
@@ -68,18 +67,19 @@ def create_adapter(app=None, use_mock_data=False):
     # Si se especificó usar datos simulados, no intentar conexión a Neo4j
     if use_mock_data:
         try:
-            from moto_adapter_fixed import MotoRecommenderAdapter
             adapter = MotoRecommenderAdapter()  # Sin parámetros de conexión
             adapter.use_mock_data = True
-            app.logger.info("Usando adaptador con datos simulados")
+            if app:
+                app.logger.info("Usando adaptador con datos simulados")
             return adapter
-        except ImportError as e:
-            app.logger.error(f"No se pudo importar MotoRecommenderAdapter: {e}")
+        except Exception as e:
+            if app:
+                app.logger.error(f"No se pudo crear MotoRecommenderAdapter: {e}")
             return None
     
     # Intentar crear el adaptador con conexión a Neo4j
     try:
-        from moto_adapter_fixed import MotoRecommenderAdapter
+        # Ya importado arriba
         
         # Extraer los parámetros individuales del diccionario neo4j_config
         if neo4j_config:
